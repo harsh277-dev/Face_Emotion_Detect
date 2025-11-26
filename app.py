@@ -2,6 +2,7 @@ import cv2
 import streamlit as st
 import numpy as np
 from keras.models import load_model
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
 # ------------------------------
 # Load model safely
@@ -29,40 +30,47 @@ emotion_colors = {
 st.set_page_config(page_title="Advanced Emotion Detector", layout="wide")
 st.title("🎭 Advanced Emotion Detection System")
 
-# Camera input (browser-based)
-img_file = st.camera_input("Take a picture")
-
 # Load face detector
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
-if img_file is not None:
-    # Convert uploaded image to OpenCV format
-    file_bytes = np.asarray(bytearray(img_file.read()), dtype=np.uint8)
-    frame = cv2.imdecode(file_bytes, 1)
+# ----------------------------
+# WebRTC Video Transformer
+# ----------------------------
+class EmotionDetector(VideoTransformerBase):
+    def transform(self, frame):
+        img = frame.to_ndarray(format="bgr24")
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
-    for (x, y, w, h) in faces:
-        face_img = frame[y:y+h, x:x+w]
+        for (x, y, w, h) in faces:
+            face_img = img[y:y+h, x:x+w]
 
-        # Resize to model input
-        resized = cv2.resize(face_img, (48, 48))
-        rgb_img = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-        img_array = np.expand_dims(rgb_img / 255.0, axis=0)
+            # Resize to model input
+            resized = cv2.resize(face_img, (48, 48))
+            rgb_img = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+            img_array = np.expand_dims(rgb_img / 255.0, axis=0)
 
-        # Predict
-        prediction = model.predict(img_array, verbose=0)[0]
-        emotion = emotion_labels[np.argmax(prediction)]
-        color = emotion_colors[emotion]
+            # Predict
+            prediction = model.predict(img_array, verbose=0)[0]
+            emotion = emotion_labels[np.argmax(prediction)]
+            color = emotion_colors[emotion]
 
-        # Draw face box
-        cv2.rectangle(frame, (x, y), (x+w, y+h), color, 3)
+            # Draw face box
+            cv2.rectangle(img, (x, y), (x+w, y+h), color, 3)
 
-        # Display emotion text
-        cv2.putText(frame, emotion, (x, y - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+            # Display emotion text
+            cv2.putText(img, emotion, (x, y - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
 
-    # Show processed frame
-    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    st.image(frame, caption="Detected Emotion(s)")
+        return img
+
+# ----------------------------
+# WebRTC Stream
+# ----------------------------
+webrtc_streamer(
+    key="emotion",
+    video_transformer_factory=EmotionDetector,
+    media_stream_constraints={"video": True, "audio": False}
+)
+

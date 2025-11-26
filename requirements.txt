@@ -1,6 +1,6 @@
 streamlit
 opencv-python
-tensorflow==2.12
+tensorflow
 keras
 numpy
 h5py

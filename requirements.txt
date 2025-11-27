@@ -1,8 +1,10 @@
+python-3.10
 streamlit
 streamlit-webrtc
 opencv-python-headless
 tensorflow-cpu
 numpy
+
 
 
 
